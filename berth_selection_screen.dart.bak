@@ -1,0 +1,1099 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../widgets/aurora_components.dart';
+import '../theme/app_theme.dart';
+
+class BerthSelectionScreen extends StatefulWidget {
+  final Map<String, dynamic>? train;
+  const BerthSelectionScreen({super.key, this.train});
+
+  @override
+  State<BerthSelectionScreen> createState() => _BerthSelectionScreenState();
+}
+
+class _BerthSelectionScreenState extends State<BerthSelectionScreen>
+    with TickerProviderStateMixin {
+  String? selectedSeat;
+  String selectedCoach = 'S1';
+  final _scrollController = ScrollController();
+  bool _showFloatingButton = false;
+  bool _showLegend = true;
+  
+  // Gender Comfort Filter
+  String selectedGender = 'Any'; // 'Male', 'Female', 'Other', 'Any'
+  bool showGenderComfortInfo = false;
+  Map<String, String> seatGenderMap = {}; // Track gender occupancy
+
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  // Enhanced coach data with realistic seat layouts and gender occupancy
+  late final List<Map<String, dynamic>> coaches;
+  
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize coaches with seat layouts
+    coaches = [
+      {
+        "coach": "S1",
+        "type": "AC 3 Tier",
+        "totalSeats": 72,
+        "availableSeats": 45,
+        "fare": "₹1,845",
+        ..._generateSeatLayout(72),
+      },
+      {
+        "coach": "S2",
+        "type": "AC 3 Tier",
+        "totalSeats": 72,
+        "availableSeats": 38,
+        "fare": "₹1,845",
+        ..._generateSeatLayout(72),
+      },
+      {
+        "coach": "S3",
+        "type": "AC 3 Tier",
+        "totalSeats": 72,
+        "availableSeats": 52,
+        "fare": "₹1,845",
+        ..._generateSeatLayout(72),
+      },
+    ];
+    
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic));
+    
+    _scrollController.addListener(() {
+      setState(() {
+        _showFloatingButton = _scrollController.offset > 200;
+      });
+    });
+    
+    _animationController.forward();
+  }
+
+  Map<String, dynamic> _generateSeatLayout(int totalSeats) {
+    List<String> seats = [];
+    Map<String, String> genderOccupancy = {};
+    
+    for (int i = 0; i < totalSeats; i++) {
+      int position = i % 8;
+      String seatType;
+      
+      if (position == 0 || position == 1) {
+        seatType = "LB"; // Lower Berth
+      } else if (position == 2 || position == 3) {
+        seatType = "MB"; // Middle Berth
+      } else if (position == 4 || position == 5) {
+        seatType = "UB"; // Upper Berth
+      } else if (position == 6) {
+        seatType = "SL"; // Side Lower
+      } else {
+        seatType = "SU"; // Side Upper
+      }
+      
+      seats.add(seatType);
+      
+      // Simulate gender occupancy for booked seats
+      if (i % 7 == 0) {
+        seats[i] = "B"; // Booked
+        // Randomly assign gender to booked seats
+        final genders = ['Male', 'Female', 'Other'];
+        genderOccupancy[i.toString()] = genders[i % 3];
+      } else {
+        // Available seats - no gender assigned yet
+        genderOccupancy[i.toString()] = 'Available';
+      }
+    }
+    
+    return {
+      'seats': seats,
+      'genderOccupancy': genderOccupancy,
+    };
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToTop() {
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
+    );
+  }
+  
+  String? getNearbyGenderOccupancy(String coach, int seatIndex) {
+    final coachData = coaches.firstWhere((c) => c['coach'] == coach);
+    final genderOccupancy = coachData['genderOccupancy'] as Map<String, String>;
+    
+    // Check nearby seats (same compartment) for gender occupancy
+    int compartment = seatIndex ~/ 8;
+    int startIndex = compartment * 8;
+    int endIndex = startIndex + 8;
+    
+    // Look for occupied seats in the same compartment
+    for (int i = startIndex; i < endIndex && i < 72; i++) {
+      if (i != seatIndex && genderOccupancy[i.toString()] != 'Available') {
+        return genderOccupancy[i.toString()];
+      }
+    }
+    
+    return null;
+  }
+
+  Color getSeatColor(String seat, String? nearbyGender) {
+    // Base colors for different seat types
+    Color baseColor;
+    
+    switch (seat) {
+      case "LB":
+        baseColor = AppTheme.primaryCrimson.withOpacity(0.1);
+        break;
+      case "MB":
+        baseColor = AppTheme.secondaryIndigo.withOpacity(0.1);
+        break;
+      case "UB":
+        baseColor = AppTheme.accentAmber.withOpacity(0.1);
+        break;
+      case "SL":
+      case "SU":
+        baseColor = AppTheme.backgroundMist;
+        break;
+      case "B":
+        baseColor = Colors.red.withOpacity(0.2);
+        break;
+      default:
+        baseColor = Colors.white.withOpacity(0.8);
+    }
+    
+    // Apply gender comfort highlighting
+    if (selectedGender != 'Any' && nearbyGender != null && nearbyGender != 'Available') {
+      if (nearbyGender == selectedGender) {
+        // Same gender - highlight with green tint for comfort
+        return Color.lerp(baseColor, Colors.green.withOpacity(0.3), 0.3) ?? baseColor;
+      } else {
+        // Different gender - subtle orange tint to indicate mixed occupancy
+        return Color.lerp(baseColor, Colors.orange.withOpacity(0.2), 0.2) ?? baseColor;
+      }
+    }
+    
+    return baseColor;
+  }
+
+  String getSeatTypeLabel(String type) {
+    switch (type) {
+      case "LB":
+        return "Lower Berth";
+      case "MB":
+        return "Middle Berth";
+      case "UB":
+        return "Upper Berth";
+      case "SL":
+        return "Side Lower";
+      case "SU":
+        return "Side Upper";
+      case "MALE":
+        return "Male Reserved";
+      case "FEMALE":
+        return "Female Reserved";
+      case "B":
+        return "Booked";
+      default:
+        return "Unknown";
+    }
+  }
+
+  IconData getSeatIcon(String type) {
+    switch (type) {
+      case "LB":
+      case "SL":
+        return Icons.hotel;
+      case "MB":
+        return Icons.bed;
+      case "UB":
+      case "SU":
+        return Icons.airline_seat_flat;
+      case "MALE":
+        return Icons.male;
+      case "FEMALE":
+        return Icons.female;
+      case "B":
+        return Icons.block;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Remove unused variables to fix lint warnings
+    // final colorScheme = Theme.of(context).colorScheme;
+    // final textTheme = Theme.of(context).textTheme;
+    
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundMist,
+      floatingActionButton: _showFloatingButton
+          ? Container(
+              decoration: BoxDecoration(
+                gradient: AppTheme.buttonGradient,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.accentAmber.withOpacity(0.4),
+                    blurRadius: 15,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: FloatingActionButton(
+                onPressed: _scrollToTop,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                child: const Icon(Icons.arrow_upward, color: Colors.white),
+              ),
+            ).animate().scale()
+          : null,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Aurora Header
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: AuroraAnimatedIcon(
+                              icon: Icons.arrow_back_ios,
+                              color: AppTheme.textCharcoal,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Select Berth',
+                                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                    color: AppTheme.textCharcoal,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  'Aurora Transit - Comfort & Privacy',
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppTheme.textCharcoal.withOpacity(0.7),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              setState(() => showGenderComfortInfo = !showGenderComfortInfo);
+                            },
+                            icon: AuroraAnimatedIcon(
+                              icon: Icons.info_outline,
+                              color: AppTheme.primaryCrimson,
+                              isActive: showGenderComfortInfo,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Gender Comfort Filter
+                      AuroraGlassCard(
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                AuroraAnimatedIcon(
+                                  icon: Icons.diversity_1,
+                                  color: AppTheme.accentAmber,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Gender Comfort Filter',
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: AppTheme.textCharcoal,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (selectedGender != 'Any')
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      gradient: AppTheme.buttonGradient,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      'Active',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: _buildGenderButtons(),
+                            ),
+                          ],
+                        ),
+                      ).animate().slideY(begin: 0.2, delay: 100.ms),
+                      
+                      // Gender Comfort Info Panel
+                      if (showGenderComfortInfo) ...[
+                        const SizedBox(height: 16),
+                        AuroraGlassCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  AuroraAnimatedIcon(
+                                    icon: Icons.security,
+                                    color: AppTheme.primaryCrimson,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Privacy & Comfort Features',
+                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                      color: AppTheme.textCharcoal,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              _buildInfoItem('🟢', 'Green highlight: Same-gender nearby berths for comfort'),
+                              const SizedBox(height: 6),
+                              _buildInfoItem('🟠', 'Orange tint: Mixed-gender compartment (user consent required)'),
+                              const SizedBox(height: 6),
+                              _buildInfoItem('🔒', 'Your privacy and safety are our priority'),
+                            ],
+                          ),
+                        ).animate().slideY(begin: -0.2).fadeIn(),
+                      ],
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Train Info Card - Aurora Design
+                      AuroraGlassCard(
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.buttonGradient,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.train,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.train?['name'] ?? 'Rajdhani Express',
+                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                      color: AppTheme.textCharcoal,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Train No. ${widget.train?['number'] ?? '12951'}',
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: AppTheme.textCharcoal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ).animate().slideX(begin: 0.2, delay: 200.ms),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Aurora Coach Selection
+            Container(
+              height: 90,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: coaches.length,
+                itemBuilder: (context, index) {
+                  final coach = coaches[index];
+                  final isSelected = coach['coach'] == selectedCoach;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() => selectedCoach = coach['coach']);
+                        HapticFeedback.lightImpact();
+                      },
+                      child: Container(
+                        width: 130,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: isSelected ? AppTheme.buttonGradient : null,
+                          color: isSelected ? null : Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected ? Colors.transparent : AppTheme.primaryCrimson.withOpacity(0.3),
+                          ),
+                          boxShadow: isSelected ? [
+                            BoxShadow(
+                              color: AppTheme.accentAmber.withOpacity(0.4),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ] : null,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Coach ${coach['coach']}',
+                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                color: isSelected ? Colors.white : AppTheme.textCharcoal,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              coach['type'],
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: isSelected ? Colors.white.withOpacity(0.8) : AppTheme.textCharcoal.withOpacity(0.7),
+                                fontSize: 10,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.airline_seat_recline_normal,
+                                  size: 14,
+                                  color: isSelected ? Colors.white : AppTheme.primaryCrimson,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${coach['availableSeats']}/${coach['totalSeats']}',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: isSelected ? Colors.white : AppTheme.textCharcoal.withOpacity(0.7),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ).animate(delay: Duration(milliseconds: index * 100)).slideX(begin: 0.3);
+                  },
+                ),
+              ),
+            ),
+
+            // Legend
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                                'Coach ${coach['coach']}',
+                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                  color: isSelected ? Colors.white : AppTheme.textCharcoal,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                coach['type'],
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: isSelected ? Colors.white.withOpacity(0.8) : AppTheme.textCharcoal.withOpacity(0.7),
+                                  fontSize: 10,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.airline_seat_recline_normal,
+                                    size: 14,
+                                    color: isSelected ? Colors.white : AppTheme.primaryCrimson,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${coach['availableSeats']}/${coach['totalSeats']}',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: isSelected ? Colors.white : AppTheme.textCharcoal.withOpacity(0.7),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ).animate(delay: Duration(milliseconds: index * 100)).slideX(begin: 0.3),
+                    );
+                  },
+                ),
+              ),
+
+              // Legend
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: AuroraGlassCard(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Seat Types',
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          children: [
+                            'LB', 'MB', 'UB', 'SL', 'SU', 'B'
+                          ].map((type) => _buildLegendItem(
+                            type,
+                            getSeatColor(type, null),
+                            getSeatTypeLabel(type),
+                            getSeatIcon(type),
+                            Theme.of(context).textTheme,
+                            Theme.of(context).colorScheme,
+                          )).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ).animate().slideY(delay: 300.ms),
+
+              // Seat Layout
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(20),
+                  itemCount: coaches.length,
+                  itemBuilder: (context, index) {
+                    final coach = coaches[index];
+                    if (coach['coach'] != selectedCoach) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Coach Header
+                        Row(
+                          children: [
+                            Text(
+                              'Coach ${coach['coach']} - ${coach['type']}',
+                              style: textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                coach['fare'],
+                                style: textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onPrimaryContainer,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Seat Layout Grid - Simplified Display
+                        AuroraGlassCard(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              children: [
+                                // Title
+                                Text(
+                                  'Select Your Seat',
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primaryCrimson,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                
+                                // Simple Grid Layout - 8 columns for easier viewing
+                                ...List.generate((coach['seats'] as List).length ~/ 8 + 1, (rowIndex) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: Column(
+                                      children: [
+                                        // Row Header
+                                        Text(
+                                          'Row ${rowIndex + 1}',
+                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: AppTheme.textCharcoal,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        
+                                        // Seat Row
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                          children: List.generate(8, (seatIndex) {
+                                            final globalIndex = rowIndex * 8 + seatIndex;
+                                            if (globalIndex >= (coach['seats'] as List).length) {
+                                              return const SizedBox(width: 40, height: 40);
+                                            }
+                                            return _buildSeat(
+                                              (coach['seats'] as List)[globalIndex],
+                                              '${coach['coach']}-${globalIndex + 1}',
+                                              globalIndex,
+                                            );
+                                          }),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ).animate(delay: Duration(milliseconds: index * 100))
+                            .slideY(begin: 0.3)
+                            .fadeIn(),
+                      ],
+                    );
+                  },
+                ),
+              ),
+
+            ],
+          ),
+        ),
+      ),
+
+      // Bottom Action Bar
+      bottomNavigationBar: selectedSeat != null
+          ? Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                child: AuroraGradientButton(
+                  text: 'Book Seat ${selectedSeat ?? ''}',
+                  onPressed: () {
+                    // Handle booking
+                  },
+                ),
+              ),
+            )
+          : null,
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                child: AuroraGradientButton(
+                  text: 'Book Seat ${selectedSeat ?? ''}',
+                  onPressed: () {
+                    // Handle booking
+                  },
+                ),
+              ),
+            )
+          : null,
+                  ),
+                ],
+              ),
+              child: ElevatedButton(
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  Navigator.pushNamed(
+                    context,
+                    '/passenger-details',
+                    arguments: {
+                      'train': widget.train,
+                      'selectedSeat': selectedSeat,
+                      'selectedCoach': selectedCoach,
+                      'genderPreference': selectedGender,
+                    },
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryCrimson,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  'Confirm Selection - ${coaches.firstWhere((c) => c['coach'] == selectedCoach)['fare']}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ).animate().slideY(begin: 1, delay: 500.ms)
+          : null,
+    );
+  }
+
+  Widget _buildSeat(
+    String seat,
+    String seatNumber,
+    int seatIndex,
+  ) {
+    bool isBooked = seat == "B";
+    bool isSelected = selectedSeat == seatNumber;
+    
+    // Get nearby gender occupancy for comfort highlighting
+    String? nearbyGender = getNearbyGenderOccupancy(selectedCoach, seatIndex);
+    
+    // Show mixed gender confirmation dialog
+    void _handleSeatSelection() {
+      if (selectedGender != 'Any' && nearbyGender != null && 
+          nearbyGender != 'Available' && nearbyGender != selectedGender) {
+        _showGenderConfirmationDialog(seatNumber, nearbyGender!);
+      } else {
+        setState(() {
+          selectedSeat = isSelected ? null : seatNumber;
+        });
+        if (!isSelected) {
+          HapticFeedback.mediumImpact();
+        }
+      }
+    }
+
+    return GestureDetector(
+      onTap: isBooked ? null : _handleSeatSelection,
+      child: AnimatedContainer(
+        duration: AppTheme.mediumAnimation,
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primaryCrimson
+              : getSeatColor(seat, nearbyGender),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.accentAmber
+                : (nearbyGender == selectedGender && selectedGender != 'Any'
+                    ? Colors.green.withOpacity(0.6)
+                    : AppTheme.primaryCrimson.withOpacity(0.3)),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppTheme.accentAmber.withOpacity(0.5),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Center(
+          child: isBooked
+              ? Icon(
+                  Icons.block,
+                  color: Colors.red,
+                  size: 20,
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      seat,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: isSelected ? Colors.white : AppTheme.textCharcoal,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                    ),
+                    Text(
+                      seatNumber.split('-').last,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: isSelected 
+                            ? Colors.white.withOpacity(0.8)
+                            : AppTheme.textCharcoal.withOpacity(0.6),
+                        fontSize: 8,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    ).animate(target: isSelected ? 1 : 0)
+        .shimmer(duration: 1000.ms)
+        .scale(begin: const Offset(1.0, 1.0), end: const Offset(1.05, 1.05));
+  }
+
+  Widget _buildLegendItem(
+    String code,
+    Color color,
+    String label,
+    IconData icon,
+    TextTheme textTheme,
+    ColorScheme colorScheme,
+  ) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: AppTheme.primaryCrimson.withOpacity(0.3),
+            ),
+          ),
+          child: Center(
+            child: code == "MALE" || code == "FEMALE"
+                ? Icon(icon, size: 16, color: AppTheme.primaryCrimson)
+                : Text(
+                    code,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppTheme.textCharcoal,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppTheme.textCharcoal.withOpacity(0.7),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  List<Widget> _buildGenderButtons() {
+    final genders = [
+      {'value': 'Male', 'icon': Icons.male, 'color': Colors.blue},
+      {'value': 'Female', 'icon': Icons.female, 'color': Colors.pink},
+      {'value': 'Other', 'icon': Icons.transgender, 'color': Colors.purple},
+      {'value': 'Any', 'icon': Icons.people, 'color': AppTheme.textCharcoal},
+    ];
+    
+    return genders.map((gender) {
+      final isSelected = selectedGender == gender['value'];
+      return Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: GestureDetector(
+            onTap: () {
+              setState(() => selectedGender = gender['value'] as String);
+              HapticFeedback.lightImpact();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                gradient: isSelected ? AppTheme.buttonGradient : null,
+                color: isSelected ? null : Colors.white.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected ? Colors.transparent : AppTheme.primaryCrimson.withOpacity(0.3),
+                ),
+                boxShadow: isSelected ? [
+                  BoxShadow(
+                    color: AppTheme.accentAmber.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ] : null,
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    gender['icon'] as IconData,
+                    color: isSelected ? Colors.white : gender['color'] as Color,
+                    size: 20,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    gender['value'] as String,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: isSelected ? Colors.white : AppTheme.textCharcoal,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
+  }
+  
+  Widget _buildInfoItem(String emoji, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          emoji,
+          style: const TextStyle(fontSize: 16),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.textCharcoal.withOpacity(0.8),
+              height: 1.4,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  void _showGenderConfirmationDialog(String seatNumber, String nearbyGender) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        content: AuroraGlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  AuroraAnimatedIcon(
+                    icon: Icons.info_outline,
+                    color: AppTheme.accentAmber,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Mixed Gender Compartment',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppTheme.textCharcoal,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This compartment has $nearbyGender passengers nearby. For your comfort and privacy, we recommend selecting a seat with same-gender occupancy.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.textCharcoal.withOpacity(0.8),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: AuroraGradientButton(
+                      text: 'Choose Different',
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AuroraGradientButton(
+                      text: 'Proceed Anyway',
+                      hasAmberGlow: true,
+                      onPressed: () {
+                        Navigator.pop(context);
+                        setState(() {
+                          selectedSeat = seatNumber;
+                        });
+                        HapticFeedback.mediumImpact();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

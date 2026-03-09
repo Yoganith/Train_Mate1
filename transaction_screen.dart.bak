@@ -1,0 +1,460 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+
+
+class TransactionScreen extends StatelessWidget {
+  const TransactionScreen({super.key});
+  
+  Widget _buildEmptyState(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String message,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 32,
+                color: Theme.of(context).colorScheme.secondary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ).animate().fadeIn(duration: const Duration(milliseconds: 300)).scale(),
+      ),
+    );
+  }
+  
+  static final List<Map<String, dynamic>> transactions = [
+    {
+      "train": "Rajdhani Express",
+      "pnr": "1234567890",
+      "amount": 1200,
+      "status": "Confirmed",
+      "date": "10 Sep 2025"
+    },
+    {
+      "train": "Shatabdi Express",
+      "pnr": "9876543210",
+      "amount": 800,
+      "status": "Pending",
+      "date": "12 Sep 2025"
+    },
+    {
+      "train": "Chennai Express",
+      "pnr": "1357924680",
+      "amount": 1500,
+      "status": "Cancelled",
+      "date": "14 Sep 2025"
+    },
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 5,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Transactions'),
+          centerTitle: true,
+          elevation: 0,
+          bottom: TabBar(
+            labelStyle: Theme.of(context).textTheme.labelLarge!.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+            unselectedLabelStyle: Theme.of(context).textTheme.labelLarge,
+            indicatorWeight: 4,
+            tabs: const [
+              Tab(
+                icon: Icon(Icons.train),
+                text: 'My Bookings',
+                iconMargin: EdgeInsets.only(bottom: 4),
+              ),
+              Tab(
+                icon: Icon(Icons.cancel_outlined),
+                text: 'Cancelled',
+                iconMargin: EdgeInsets.only(bottom: 4),
+              ),
+              Tab(
+                icon: Icon(Icons.error_outline),
+                text: 'Failed',
+                iconMargin: EdgeInsets.only(bottom: 4),
+              ),
+              Tab(
+                icon: Icon(Icons.currency_rupee),
+                text: 'Refund',
+                iconMargin: EdgeInsets.only(bottom: 4),
+              ),
+              Tab(
+                icon: Icon(Icons.description_outlined),
+                text: 'TDR',
+                iconMargin: EdgeInsets.only(bottom: 4),
+              ),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            // My Bookings Tab
+            ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: transactions.length,
+              itemBuilder: (context, index) {
+                final txn = transactions[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  elevation: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                MdiIcons.train,
+                                color: Theme.of(context).colorScheme.secondary,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    txn['train'],
+                                    style: Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  Text(
+                                    "PNR: ${txn['pnr']}",
+                                    style: Theme.of(context).textTheme.bodyMedium,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Chip(
+                              label: Text(txn['status']),
+                              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                              labelStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              txn['date'],
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            Text(
+                              "₹${txn['amount']}",
+                              style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn(
+                  delay: Duration(milliseconds: index * 100),
+                  duration: const Duration(milliseconds: 200),
+                ).slideX(begin: 0.2, end: 0);
+              },
+            ),
+
+            // Cancelled Tab
+            ListView(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              children: [
+                _buildEmptyState(
+                  context,
+                  icon: Icons.cancel_outlined,
+                  title: "No Cancelled Tickets",
+                  message: "Your cancelled tickets will appear here",
+                ),
+              ],
+            ),
+
+            // Failed Tab
+            ListView(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              children: [
+                _buildEmptyState(
+                  context,
+                  icon: Icons.error_outline,
+                  title: "No Failed Transactions",
+                  message: "Your failed transactions will appear here",
+                ),
+              ],
+            ),
+
+            // Refund Tab
+            ListView(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              children: [
+                _buildEmptyState(
+                  context,
+                  icon: Icons.currency_rupee,
+                  title: "No Refund Records",
+                  message: "Your refund records will appear here",
+                ),
+              ],
+            ),
+
+            // TDR Tab
+            ListView(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              children: [
+                _buildEmptyState(
+                  context,
+                  icon: Icons.description_outlined,
+                  title: "No TDR Requests",
+                  message: "Your TDR requests will appear here",
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+    
+    return DefaultTabController(
+      length: 5,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Transactions"),
+          centerTitle: true,
+          scrolledUnderElevation: 0,
+          bottom: TabBar(
+            isScrollable: true,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+            dividerColor: Colors.transparent,
+            tabs: [
+              Tab(
+                icon: const Icon(Icons.train),
+                text: 'My Bookings',
+                iconMargin: const EdgeInsets.only(bottom: 4),
+              ),
+              Tab(
+                icon: const Icon(Icons.cancel_outlined),
+                text: 'Cancelled',
+                iconMargin: const EdgeInsets.only(bottom: 4),
+              ),
+              Tab(
+                icon: const Icon(Icons.error_outline),
+                text: 'Failed',
+                iconMargin: const EdgeInsets.only(bottom: 4),
+              ),
+              Tab(
+                icon: const Icon(Icons.currency_rupee),
+                text: 'Refund',
+                iconMargin: const EdgeInsets.only(bottom: 4),
+              ),
+              Tab(
+                icon: const Icon(Icons.description_outlined),
+                text: 'TDR',
+                iconMargin: const EdgeInsets.only(bottom: 4),
+              ),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            // My Bookings Tab
+            ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: transactions.length,
+              itemBuilder: (context, index) {
+                final txn = transactions[index];
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  elevation: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                        width: 1,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.train,
+                                color: Theme.of(context).colorScheme.secondary,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    txn["train"],
+                                    style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    txn["date"],
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  "₹${txn["amount"]}",
+                                  style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: txn["status"] == "Confirmed"
+                                        ? Colors.green.withOpacity(0.1)
+                                        : txn["status"] == "Pending"
+                                            ? Colors.orange.withOpacity(0.1)
+                                            : Colors.red.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    txn["status"],
+                                    style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                                          color: txn["status"] == "Confirmed"
+                                              ? Colors.green
+                                              : txn["status"] == "Pending"
+                                                  ? Colors.orange
+                                                  : Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                  ),
+                                ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Divider(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          "PNR: ${txn["pnr"]}",
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn(delay: Duration(milliseconds: index * 100)).slideX();
+              },
+            ),
+
+            Builder(
+              builder: (context) => ListView(
+                children: [
+                  _buildEmptyState(
+                    context,
+                    icon: Icons.cancel_outlined,
+                    title: "No Cancelled Tickets",
+                    message: "Your cancelled tickets will appear here",
+                  ),
+                ],
+              ),
+            ),
+
+            Builder(
+              builder: (context) => ListView(
+                children: [
+                  _buildEmptyState(
+                    context,
+                    icon: Icons.error_outline,
+                    title: "No Failed Transactions",
+                    message: "Your failed transactions will appear here",
+                  ),
+                ],
+              ),
+            ),
+
+            ListView(
+              children: [
+                _buildEmptyState(
+                  context,
+                  icon: Icons.currency_rupee,
+                  title: "No Refund Records",
+                  message: "Your refund records will appear here",
+                ),
+              ],
+            ),
+
+            ListView(
+              children: [
+                _buildEmptyState(
+                  context,
+                  icon: Icons.description_outlined,
+                  title: "No TDR Requests",
+                  message: "Your TDR requests will appear here",
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
